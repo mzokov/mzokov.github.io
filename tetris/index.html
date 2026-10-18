@@ -116,6 +116,12 @@ kbd{font-family:var(--f-mono);font-size:12px;border:1px solid var(--line);backgr
 .rows .ln{font-family:var(--f-mono);font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;min-width:5ch;text-align:right}
 .rows li.me .nm{color:var(--accent);font-weight:600}
 .rows.games li{grid-template-columns:minmax(0,1fr) auto auto}
+.themes li{grid-template-columns:auto minmax(0,1fr) auto;align-items:center}
+.sw{display:inline-flex;gap:2px}.sw i{width:10px;height:18px;display:block}
+.themes .btn{padding:5px 10px;font-size:13px}
+.themes .btn[disabled]{opacity:.6;cursor:default}
+.coinline{font-family:var(--f-mono);font-size:13px;color:var(--ok);font-weight:600}
+#hubbar{min-width:0}
 .empty{color:var(--muted);font-size:14px;padding:6px 0}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
@@ -123,40 +129,17 @@ kbd{font-family:var(--f-mono);font-size:12px;border:1px solid var(--line);backgr
 </head>
 <body>
 <a href="../" style="display:block;max-width:760px;margin:0 auto 12px;color:var(--muted);font:500 14px var(--f-body);text-decoration:none">&larr; Все игры</a>
+<script src="../shared/hub.js"></script>
 <div class="app">
   <header class="top">
     <div class="brand">
       <h1>ТЕТРИС</h1>
       <p class="sub">стакан 10×20 · 7 фигур</p>
     </div>
-    <div class="acct" id="acct" hidden>
-      <span class="who" id="who"></span>
-      <button class="btn ghost" id="logout" type="button">Выйти</button>
-    </div>
+    <div id="hubbar"></div>
   </header>
 
-  <section id="authView" class="auth panel" aria-labelledby="authTitle">
-    <h2 id="authTitle">Войдите, чтобы играть</h2>
-    <div class="tabs" role="tablist">
-      <button type="button" role="tab" id="tabLogin" aria-selected="true">Вход</button>
-      <button type="button" role="tab" id="tabReg" aria-selected="false">Регистрация</button>
-    </div>
-    <form id="authForm" class="auth" style="padding:0;gap:12px;max-width:none" novalidate>
-      <div class="field">
-        <label class="label" for="nick">Ник</label>
-        <input id="nick" name="nick" type="text" autocomplete="username" maxlength="16" spellcheck="false" placeholder="например, Алексей">
-      </div>
-      <div class="field">
-        <label class="label" for="pw">Пароль</label>
-        <input id="pw" name="pw" type="password" autocomplete="current-password" maxlength="64" placeholder="не короче 4 символов">
-      </div>
-      <p class="err" id="authErr" role="alert"></p>
-      <button class="btn primary wide" id="authSubmit" type="submit">Войти</button>
-    </form>
-    <p class="note" id="authNote">Аккаунты хранятся в этом браузере. Пароль сохраняется только в виде хеша.</p>
-  </section>
-
-  <section id="gameView" hidden>
+  <section id="gameView">
     <div class="stage">
       <div class="boardwrap" id="boardwrap">
         <canvas id="cv" class="board" aria-label="Игровое поле"></canvas>
@@ -174,6 +157,7 @@ kbd{font-family:var(--f-mono);font-size:12px;border:1px solid var(--line);backgr
             <h2>Игра окончена</h2>
             <p class="overstat" id="overStat"></p>
             <p class="overnote" id="overNote" aria-live="polite"></p>
+            <p class="coinline" id="overCoins"></p>
             <button class="btn primary wide" id="againBtn" type="button">Играть снова</button>
             <button class="btn wide" id="changeBtn" type="button">Сменить сложность</button>
           </div>
@@ -214,6 +198,11 @@ kbd{font-family:var(--f-mono);font-size:12px;border:1px solid var(--line);backgr
         <div class="seg" id="lbScope" role="group" aria-label="Источник таблицы"></div>
         <ol class="rows" id="lbRows"></ol>
         <p class="note" id="lbNote"></p>
+      </div>
+      <div class="panel">
+        <h3>Темы <span class="note" id="shopCoins"></span></h3>
+        <p class="note">Монеты общие для всех игр. За линии в Тетрисе дают монеты, их можно тратить и здесь, и в Змейке.</p>
+        <ul class="rows themes" id="themeList"></ul>
       </div>
       <div class="panel">
         <h3>Управление</h3>
@@ -265,110 +254,58 @@ kbd{font-family:var(--f-mono);font-size:12px;border:1px solid var(--line);backgr
     mem[k] = v;
     try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { storageOk = false; }
   }
-  var AK = 'tetris.accounts.v1', SK = 'tetris.session.v1', DK = 'tetris.diff.v1';
-  function accounts() { return lsGet(AK, {}); }
+  var DK = 'tetris.diff.v1';
 
-  /* ---------- хеш пароля ---------- */
-  function fallbackHash(s) {
-    var h1 = 0xdeadbeef, h2 = 0x41c6ce57;
-    for (var i = 0; i < s.length; i++) {
-      var c = s.charCodeAt(i);
-      h1 = Math.imul(h1 ^ c, 2654435761);
-      h2 = Math.imul(h2 ^ c, 1597334677);
-    }
-    h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
-    h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
-    return (h2 >>> 0).toString(16).padStart(8, '0') + (h1 >>> 0).toString(16).padStart(8, '0');
+  /* ---------- общий аккаунт ---------- */
+  var THEMES = [
+    { id: 'classic', name: 'Классика', price: 0 },
+    { id: 'neon', name: 'Неон', price: 60, pal: { board: '#0b0b1a', grid: '#1a1a38', I: '#00f0ff', O: '#fff200', T: '#c400ff', S: '#00ff6a', Z: '#ff2a5f', J: '#3a6bff', L: '#ff8a00', G: '#59607a' } },
+    { id: 'ocean', name: 'Океан', price: 100, pal: { board: '#06222e', grid: '#0c3444', I: '#4fd8e8', O: '#f4e285', T: '#8e9bff', S: '#3fcf9b', Z: '#ff7b7b', J: '#3b8cff', L: '#ffb066', G: '#4b6a78' } },
+    { id: 'sunset', name: 'Закат', price: 150, pal: { board: '#2a1020', grid: '#3d1a2e', I: '#ffb347', O: '#ffd86b', T: '#ff6f91', S: '#ff9671', Z: '#d65db1', J: '#845ec2', L: '#f9f871', G: '#7a5a6a' } },
+    { id: 'candy', name: 'Конфеты', price: 220, pal: { board: '#fff0f6', grid: '#ffd6e7', I: '#5ad1e6', O: '#ffd34e', T: '#b388ff', S: '#7ed957', Z: '#ff6b8b', J: '#6c8cff', L: '#ff9f5a', G: '#c9b6c0' } },
+    { id: 'mono', name: 'Графит', price: 300, pal: { board: '#16181b', grid: '#23272c', I: '#e8eaed', O: '#c9ced4', T: '#aab1b9', S: '#d6dade', Z: '#8f979f', J: '#b9bfc6', L: '#f3f4f6', G: '#4a5057' } }
+  ];
+  var guestFallback = { best: {}, games: [], themes: ['classic'], theme: 'classic' };
+  function td() {
+    var g = Hub.gameData('tetris', { best: {}, games: [], themes: ['classic'], theme: 'classic' });
+    if (!g.best || typeof g.best !== 'object') g.best = {};
+    if (!Array.isArray(g.games)) g.games = [];
+    if (!Array.isArray(g.themes) || g.themes.indexOf('classic') < 0) g.themes = ['classic'].concat(Array.isArray(g.themes) ? g.themes : []);
+    return g;
   }
-  function hashPw(pw, salt) {
-    var text = salt + ':' + pw;
-    try {
-      if (window.crypto && crypto.subtle) {
-        var data = new TextEncoder().encode(text);
-        return crypto.subtle.digest('SHA-256', data).then(function (buf) {
-          return Array.prototype.map.call(new Uint8Array(buf), function (b) { return b.toString(16).padStart(2, '0'); }).join('');
+  function themeById(id) { for (var i = 0; i < THEMES.length; i++) if (THEMES[i].id === id) return THEMES[i]; return THEMES[0]; }
+  function renderThemes() {
+    var ul = $('themeList');
+    if (!ul) return;
+    ul.textContent = '';
+    var g = td();
+    $('shopCoins').textContent = '· у тебя ' + Hub.coins() + ' ' + Hub.plural(Hub.coins(), ['монета', 'монеты', 'монет']);
+    THEMES.forEach(function (th) {
+      var li = document.createElement('li');
+      var sw = document.createElement('span'); sw.className = 'sw';
+      var p = th.pal || null;
+      ['I', 'O', 'T', 'S', 'Z'].forEach(function (k) {
+        var i = document.createElement('i');
+        i.style.background = p ? p[k] : 'var(--p-' + k.toLowerCase() + ')';
+        sw.appendChild(i);
+      });
+      var nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = th.name;
+      var b = document.createElement('button'); b.type = 'button'; b.className = 'btn';
+      var owned = g.themes.indexOf(th.id) >= 0;
+      if (g.theme === th.id) { b.textContent = 'Выбрана'; b.disabled = true; }
+      else if (owned) { b.textContent = 'Выбрать'; b.addEventListener('click', function () { g.theme = th.id; Hub.save(); renderThemes(); }); }
+      else {
+        b.textContent = th.price + ' мон.';
+        b.setAttribute('aria-label', 'Купить тему ' + th.name + ' за ' + th.price + ' монет');
+        b.addEventListener('click', function () {
+          if (Hub.coins() < th.price && Hub.user()) { Hub.toast('Не хватает монет: нужно ' + th.price); return; }
+          if (Hub.spend(th.price)) { g.themes.push(th.id); g.theme = th.id; Hub.save(); renderThemes(); Hub.toast('Тема «' + th.name + '» куплена'); }
         });
       }
-    } catch (e) {}
-    return Promise.resolve(fallbackHash(text));
+      li.appendChild(sw); li.appendChild(nm); li.appendChild(b);
+      ul.appendChild(li);
+    });
   }
-  function makeSalt() {
-    try {
-      var a = new Uint8Array(8); crypto.getRandomValues(a);
-      return Array.prototype.map.call(a, function (b) { return b.toString(16).padStart(2, '0'); }).join('');
-    } catch (e) { return Math.random().toString(16).slice(2, 12); }
-  }
-
-  /* ---------- аккаунты ---------- */
-  var meKey = null;
-  var authMode = 'login';
-
-  function normNick(n) { return n.trim().toLowerCase(); }
-  function validNick(n) { return /^[\p{L}\p{N}_\-. ]{2,16}$/u.test(n); }
-  function getAcc() { return accounts()[meKey]; }
-  function saveAcc(acc) { var all = accounts(); all[meKey] = acc; lsSet(AK, all); }
-
-  function setAuthMode(mode) {
-    authMode = mode;
-    $('tabLogin').setAttribute('aria-selected', mode === 'login');
-    $('tabReg').setAttribute('aria-selected', mode === 'register');
-    $('authSubmit').textContent = mode === 'login' ? 'Войти' : 'Создать аккаунт';
-    $('pw').autocomplete = mode === 'login' ? 'current-password' : 'new-password';
-    $('authErr').textContent = '';
-  }
-
-  $('tabLogin').addEventListener('click', function () { setAuthMode('login'); });
-  $('tabReg').addEventListener('click', function () { setAuthMode('register'); });
-
-  $('authForm').addEventListener('submit', function (e) {
-    e.preventDefault();
-    var nick = $('nick').value.trim(), pw = $('pw').value, err = $('authErr');
-    err.textContent = '';
-    if (!validNick(nick)) { err.textContent = 'Ник: от 2 до 16 символов, буквы, цифры, пробел, дефис, точка или подчёркивание.'; return; }
-    if (pw.length < 4) { err.textContent = 'Пароль должен быть не короче 4 символов.'; return; }
-    var key = normNick(nick), all = accounts(), acc = all[key];
-    if (authMode === 'register') {
-      if (acc) { err.textContent = 'Такой ник уже занят. Выберите другой или войдите.'; return; }
-      var salt = makeSalt();
-      hashPw(pw, salt).then(function (h) {
-        var a = { nick: nick, salt: salt, hash: h, created: Date.now(), best: {}, games: [] };
-        var cur = accounts(); cur[key] = a; lsSet(AK, cur);
-        login(key);
-      });
-    } else {
-      if (!acc) { err.textContent = 'Аккаунт с таким ником не найден. Проверьте ник или зарегистрируйтесь.'; return; }
-      hashPw(pw, acc.salt).then(function (h) {
-        if (h !== acc.hash) { err.textContent = 'Неверный пароль.'; return; }
-        login(key);
-      });
-    }
-  });
-
-  function login(key) {
-    meKey = key;
-    lsSet(SK, key);
-    $('pw').value = '';
-    var acc = getAcc();
-    $('who').textContent = acc.nick;
-    $('acct').hidden = false;
-    $('authView').hidden = true;
-    $('gameView').hidden = false;
-    resetToIdle();
-    renderBoardList();
-    updateStats(true);
-    initCanvases();
-  }
-
-  $('logout').addEventListener('click', function () {
-    meKey = null;
-    lsSet(SK, null);
-    state = 'idle';
-    $('acct').hidden = true;
-    $('gameView').hidden = true;
-    $('authView').hidden = false;
-    $('nick').value = '';
-    setAuthMode('login');
-  });
 
   /* ---------- состояние игры ---------- */
   var diff = lsGet(DK, 'normal');
@@ -469,6 +406,8 @@ kbd{font-family:var(--f-mono);font-size:12px;border:1px solid var(--line);backgr
     canHold = false;
   }
   var SCORE_TABLE = [0, 100, 300, 500, 800];
+  var COIN_TABLE = [0, 1, 2, 4, 8];
+  var runCoins = 0;
   function lockPiece() {
     var over = false;
     for (var cy = 0; cy < cur.m.length; cy++) {
@@ -486,6 +425,9 @@ kbd{font-family:var(--f-mono);font-size:12px;border:1px solid var(--line);backgr
       score += Math.round(SCORE_TABLE[n] * level * DIFFS[diff].mult);
       lines += n;
       level = 1 + Math.floor(lines / 10);
+      var cn = COIN_TABLE[n] * (diff === 'hard' ? 2 : 1);
+      runCoins += cn;
+      Hub.addCoins(cn);
     }
     if (over) { gameOver(); return; }
     canHold = true;
@@ -503,7 +445,7 @@ kbd{font-family:var(--f-mono);font-size:12px;border:1px solid var(--line);backgr
   function newGame() {
     board = newBoard();
     queue = []; hold = null; canHold = true;
-    score = 0; lines = 0; level = 1;
+    score = 0; lines = 0; level = 1; runCoins = 0;
     addGarbage(DIFFS[diff].garbage);
     state = 'play';
     showVeil(null);
@@ -530,80 +472,38 @@ kbd{font-family:var(--f-mono);font-size:12px;border:1px solid var(--line);backgr
   function gameOver() {
     state = 'over';
     var isRecord = saveResult();
+    var bonus = Math.floor(score / 1000);
+    if (bonus > 0) { runCoins += bonus; Hub.addCoins(bonus); }
     $('overStat').textContent = 'Счёт ' + fmt(score) + ' · линий ' + lines + ' · уровень ' + level;
+    $('overCoins').textContent = runCoins > 0 ? 'Заработано: ' + runCoins + ' ' + Hub.plural(runCoins, ['монета', 'монеты', 'монет']) : '';
     var note = $('overNote');
     note.textContent = '';
-    var base = document.createElement('span');
-    base.textContent = 'Результат сохранён в вашем аккаунте. ';
     if (isRecord) {
       var g = document.createElement('span');
       g.className = 'good';
       g.textContent = 'Новый личный рекорд на уровне «' + DIFFS[diff].name + '». ';
       note.appendChild(g);
     }
+    var base = document.createElement('span');
+    base.textContent = Hub.user() ? 'Результат сохранён в вашем аккаунте.' : 'Вы играете как гость, результат не сохранится.';
     note.appendChild(base);
-    var gl = document.createElement('span');
-    note.appendChild(gl);
-    pushGlobal(getAcc()).then(function (ok) {
-      if (ok) gl.textContent = 'Отправлен в общую таблицу.';
-      renderBoardList();
-    });
     showVeil('over');
     updateStats(true);
     renderBoardList();
+    renderThemes();
+    if (!Hub.user()) setTimeout(Hub.offerSave, 700);
   }
 
   function saveResult() {
-    var acc = getAcc();
-    if (!acc) return false;
+    var acc = td();
     acc.games = [{ d: diff, s: score, l: lines, lv: level, t: Date.now() }].concat(acc.games || []).slice(0, 30);
-    acc.best = acc.best || {};
     var prev = acc.best[diff], rec = false;
     if (score > 0 && (!prev || score > prev.score)) {
       acc.best[diff] = { score: score, lines: lines, level: level };
       rec = true;
     }
-    saveAcc(acc);
+    Hub.save();
     return rec;
-  }
-
-  /* ---------- общая таблица (db) ---------- */
-  var db = null, uid = null, globalDocs = [], globalOk = false, globalErr = false, scope = 'local', scopeTouched = false;
-
-  function pushGlobal(acc) {
-    if (!db || !uid || !acc) return Promise.resolve(false);
-    var ref = db.doc('scores/' + uid);
-    return ref.get().then(function (snap) {
-      var data = snap.exists ? snap.data() : {};
-      var players = Object.assign({}, (data && data.players) || {});
-      players[meKey] = { nick: acc.nick, best: acc.best || {} };
-      return ref.set({ players: players });
-    }).then(function () { globalErr = false; return true; })
-      .catch(function () { globalErr = true; return false; });
-  }
-
-  function connectClaude() {
-    var c = window.claude;
-    if (!c || !c.use) return;
-    Promise.all([c.use('db'), c.use('user')]).then(function (res) {
-      db = res[0];
-      var user = res[1];
-      if (!db || !user) { db = null; return null; }
-      return user.id().then(function (id) {
-        uid = id;
-        if (!uid) { db = null; return; }
-        db.collection('scores').limit(500).onSnapshot(function (snap) {
-          globalDocs = snap.docs.map(function (d) { return d.data(); });
-          globalOk = true;
-          if (!scopeTouched && scope === 'local') scope = 'global';
-          renderBoardList();
-        }, function () { globalErr = true; globalOk = false; renderBoardList(); });
-        if (!scopeTouched) scope = 'global';
-        var acc = meKey ? getAcc() : null;
-        if (acc) pushGlobal(acc).then(renderBoardList);
-        renderBoardList();
-      });
-    }).catch(function () { db = null; });
   }
 
   /* ---------- интерфейс ---------- */
@@ -615,8 +515,8 @@ kbd{font-family:var(--f-mono);font-size:12px;border:1px solid var(--line);backgr
   }
   function updateStats(force) {
     if (force) lastStats = {};
-    var acc = meKey ? getAcc() : null;
-    var b = acc && acc.best && acc.best[diff] ? acc.best[diff].score : 0;
+    var tb = td().best[diff];
+    var b = tb ? tb.score : 0;
     setOut('stScore', fmt(score));
     setOut('stLines', lines);
     setOut('stLevel', level);
@@ -661,24 +561,13 @@ kbd{font-family:var(--f-mono);font-size:12px;border:1px solid var(--line);backgr
   $('resumeBtn').addEventListener('click', resumeGame);
 
   /* таблица рекордов */
-  var lbDiff = diff;
+  var lbDiff = diff, scope = 'local';
   function entries() {
-    var out = [], k, b;
-    if (scope === 'global') {
-      globalDocs.forEach(function (d) {
-        var p = (d && d.players) || {};
-        Object.keys(p).forEach(function (key) {
-          b = p[key] && p[key].best && p[key].best[lbDiff];
-          if (b && b.score > 0) out.push({ nick: String(p[key].nick || key).slice(0, 16), score: b.score, lines: b.lines || 0, mine: false, key: key });
-        });
-      });
-    } else {
-      var all = accounts();
-      Object.keys(all).forEach(function (key) {
-        b = all[key].best && all[key].best[lbDiff];
-        if (b && b.score > 0) out.push({ nick: all[key].nick, score: b.score, lines: b.lines || 0, mine: key === meKey, key: key });
-      });
-    }
+    var out = [], me = Hub.user();
+    Hub.accounts().forEach(function (a) {
+      var g = a.games && a.games.tetris, b = g && g.best && g.best[lbDiff];
+      if (b && b.score > 0) out.push({ nick: a.name, score: b.score, lines: b.lines || 0, mine: !!me && me.id === a.id });
+    });
     out.sort(function (x, y) { return y.score - x.score; });
     return out.slice(0, 10);
   }
@@ -693,25 +582,19 @@ kbd{font-family:var(--f-mono);font-size:12px;border:1px solid var(--line);backgr
       b.addEventListener('click', function () { lbDiff = k; renderBoardList(); });
       dBox.appendChild(b);
     });
-    var scopes = [];
-    if (db && uid) scopes.push(['global', 'Общая']);
-    scopes.push(['local', 'Этот браузер'], ['mine', 'Мои игры']);
-    if (scope === 'global' && !(db && uid)) scope = 'local';
-    scopes.forEach(function (s) {
+    [['local', 'Все игроки'], ['mine', 'Мои игры']].forEach(function (s) {
       var b = document.createElement('button');
       b.type = 'button'; b.textContent = s[1];
       b.setAttribute('aria-pressed', String(s[0] === scope));
-      b.addEventListener('click', function () { scope = s[0]; scopeTouched = true; renderBoardList(); });
+      b.addEventListener('click', function () { scope = s[0]; renderBoardList(); });
       sBox.appendChild(b);
     });
-
     var ol = $('lbRows');
     ol.textContent = '';
     ol.className = 'rows' + (scope === 'mine' ? ' games' : '');
     if (scope === 'mine') {
-      var acc = meKey ? getAcc() : null;
-      var g = (acc && acc.games || []).slice(0, 10);
-      if (!g.length) { appendEmpty(ol, 'Вы ещё не играли. Результаты появятся здесь после первой партии.'); }
+      var g = td().games.slice(0, 10);
+      if (!g.length) { appendEmpty(ol, Hub.user() ? 'Вы ещё не играли. Результаты появятся здесь после первой партии.' : 'Партии гостя не сохраняются. Войдите, чтобы вести историю.'); }
       g.forEach(function (r) {
         var li = document.createElement('li');
         var dt = new Date(r.t);
@@ -727,7 +610,7 @@ kbd{font-family:var(--f-mono);font-size:12px;border:1px solid var(--line);backgr
       if (!list.length) appendEmpty(ol, 'Здесь пока никого нет. Сыграйте партию на уровне «' + DIFFS[lbDiff].name + '».');
       list.forEach(function (e, i) {
         var li = document.createElement('li');
-        if (e.mine || (scope === 'global' && e.key === meKey && e.nick === (meKey && getAcc() ? getAcc().nick : ''))) li.className = 'me';
+        if (e.mine) li.className = 'me';
         var r = document.createElement('span'); r.className = 'rk'; r.textContent = String(i + 1);
         var n = document.createElement('span'); n.className = 'nm'; n.textContent = e.nick;
         var s = document.createElement('span'); s.className = 'sc'; s.textContent = fmt(e.score);
@@ -736,11 +619,7 @@ kbd{font-family:var(--f-mono);font-size:12px;border:1px solid var(--line);backgr
         ol.appendChild(li);
       });
     }
-    var note = $('lbNote');
-    if (scope === 'global') note.textContent = 'Общая таблица: результаты всех, кто открыл эту страницу.';
-    else if (scope === 'local') note.textContent = (db && uid) ? 'Игроки, зарегистрированные в этом браузере.' : 'Общая таблица недоступна в этом просмотре, показаны игроки этого браузера.';
-    else note.textContent = 'Ваши последние партии на всех уровнях сложности.';
-    if (globalErr && scope === 'global') note.textContent += ' Часть результатов не удалось синхронизировать.';
+    $('lbNote').textContent = scope === 'mine' ? 'Ваши последние партии на всех уровнях сложности.' : 'Игроки, у которых есть аккаунт в этом браузере.';
   }
   function appendEmpty(ol, text) {
     var li = document.createElement('li');
@@ -776,6 +655,8 @@ kbd{font-family:var(--f-mono);font-size:12px;border:1px solid var(--line);backgr
       board: g('--board'), grid: g('--grid'),
       I: g('--p-i'), O: g('--p-o'), T: g('--p-t'), S: g('--p-s'), Z: g('--p-z'), J: g('--p-j'), L: g('--p-l'), G: g('--p-g')
     };
+    var th = themeById(td().theme);
+    if (th.pal) Object.keys(th.pal).forEach(function (k) { pal[k] = th.pal[k]; });
   }
   function drawCell(ctx, x, y, s, col) {
     var bv = Math.max(2, Math.round(s / 10));
@@ -928,12 +809,21 @@ kbd{font-family:var(--f-mono);font-size:12px;border:1px solid var(--line);backgr
   });
 
   /* ---------- запуск ---------- */
-  setAuthMode('login');
-  lsSet('tetris.probe', 1);
-  if (!storageOk) $('authNote').textContent = 'Хранилище браузера недоступно: аккаунты сохранятся только до закрытия страницы.';
-  var sess = lsGet(SK, null);
-  if (sess && accounts()[sess]) { initCanvases(); login(sess); }
-  connectClaude();
+  Hub.mountBar($('hubbar'));
+  Hub.on('coins', renderThemes);
+  Hub.on('modal', function (d) { if (d.open) pauseGame(); });
+  Hub.on('session', function () {
+    pauseGame();
+    if (state !== 'play' && state !== 'pause') resetToIdle();
+    renderThemes(); renderBoardList(); updateStats(true);
+  });
+  Hub.ready.then(function () {
+    initCanvases();
+    resetToIdle();
+    renderBoardList();
+    renderThemes();
+    updateStats(true);
+  });
   requestAnimationFrame(frame);
 })();
 </script>

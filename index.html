@@ -23,6 +23,11 @@
 body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size:16px;line-height:1.5;
   padding:clamp(20px,5vw,48px) 16px 56px}
 .wrap{max-width:960px;margin:0 auto}
+.top{display:flex;justify-content:flex-end;min-height:44px;margin-bottom:12px}
+.welcome{display:flex;align-items:center;justify-content:space-between;gap:12px 20px;flex-wrap:wrap;background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:16px 20px;margin:0 0 clamp(20px,4vw,28px)}
+.welcome p{margin:0;max-width:52ch}
+.wbtn{font:inherit;font-weight:700;min-height:44px;padding:8px 20px;border-radius:12px;border:0;background:var(--accent);color:var(--surface);cursor:pointer}
+.wbtn:focus-visible{outline:3px solid var(--fg);outline-offset:2px}
 h1{font-family:var(--font-display);font-weight:700;font-size:clamp(34px,9vw,60px);line-height:1.05;margin:0 0 10px;text-wrap:balance}
 .lead{margin:0 0 clamp(22px,5vw,36px);color:var(--muted);max-width:46ch}
 .grid{display:grid;gap:20px;grid-template-columns:repeat(auto-fill,minmax(min(100%,270px),1fr))}
@@ -46,8 +51,14 @@ footer{margin-top:36px;color:var(--muted);font-size:13px;max-width:60ch}
 </head>
 <body>
 <main class="wrap">
+  <div class="top"><div id="hubbar"></div></div>
   <h1>Игры</h1>
   <p class="lead">Играй прямо в браузере, на компьютере или на телефоне. Ничего устанавливать не нужно.</p>
+
+  <section class="welcome" id="welcome" hidden>
+    <p><b>Можно играть сразу, без регистрации.</b> Войди в аккаунт, чтобы монеты и рекорды сохранялись и работали во всех играх.</p>
+    <button class="wbtn" id="welcomeBtn" type="button">Войти или создать аккаунт</button>
+  </section>
 
   <div class="grid">
     <a class="card" href="snake/">
@@ -55,7 +66,7 @@ footer{margin-top:36px;color:var(--muted);font-size:13px;max-width:60ch}
       <div class="info">
         <h2>Змейка</h2>
         <p class="desc">Собирай яблоки и монеты, покупай скины. Стены проходимы, а случайные испытания не дают заскучать.</p>
-        <div class="tags"><span class="tag">до 10 игроков</span><span class="tag">скины</span><span class="tag">испытания</span></div>
+        <div class="tags"><span class="tag">скины</span><span class="tag">монеты</span><span class="tag">испытания</span></div>
         <span class="play">Играть &rarr;</span>
       </div>
     </a>
@@ -65,7 +76,7 @@ footer{margin-top:36px;color:var(--muted);font-size:13px;max-width:60ch}
       <div class="info">
         <h2>Тетрис</h2>
         <p class="desc">Классический стакан 10&times;20, запас фигуры, три уровня сложности и таблица рекордов.</p>
-        <div class="tags"><span class="tag">3 сложности</span><span class="tag">рекорды</span></div>
+        <div class="tags"><span class="tag">3 сложности</span><span class="tag">темы</span><span class="tag">рекорды</span></div>
         <span class="play">Играть &rarr;</span>
       </div>
     </a>
@@ -76,7 +87,17 @@ footer{margin-top:36px;color:var(--muted);font-size:13px;max-width:60ch}
     </div>
   </div>
 
-  <footer>Игроки, монеты и рекорды хранятся в браузере того устройства, на котором ты играешь.</footer>
+  <footer>Аккаунт общий для всех игр. Данные хранятся в браузере этого устройства, на другом устройстве аккаунт нужно создать заново.</footer>
 </main>
+<script src="shared/hub.js"></script>
+<script>
+(function () {
+  Hub.mountBar(document.getElementById('hubbar'));
+  function sync() { document.getElementById('welcome').hidden = !!Hub.user(); }
+  Hub.on('session', sync);
+  Hub.ready.then(sync);
+  document.getElementById('welcomeBtn').addEventListener('click', function () { Hub.openLogin(); });
+})();
+</script>
 </body>
 </html>

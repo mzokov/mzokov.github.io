@@ -107,6 +107,7 @@ h1 {
   padding: 18px;
 }
 
+.topbar { display: flex; justify-content: flex-end; min-height: 40px; margin-bottom: 8px; }
 .hud { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px 18px; margin-bottom: 10px; min-height: 56px; }
 .stat { display: flex; flex-direction: column; }
 .stat .k { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 700; }
@@ -452,7 +453,9 @@ input[type="text"], input.pin {
 </head>
 <body>
 <a href="../" style="display:block;max-width:920px;margin:0 auto 12px;color:var(--muted);font:500 14px var(--font-body);text-decoration:none">&larr; Все игры</a>
+<script src="../shared/hub.js"></script>
 <main class="app">
+  <div class="topbar"><div id="hubbar"></div></div>
   <header class="head">
     <h1>Змейка</h1>
     <p class="lead">Собирай яблоки и монеты. Стены проходимы, а укус себя заканчивает игру.</p>
@@ -478,49 +481,11 @@ input[type="text"], input.pin {
         <div class="sr" id="live" aria-live="polite"></div>
 
         <div class="overlay" id="overlay">
-          <div class="panel" id="pAcc">
-            <h2 id="accTitle">Кто играет?</h2>
-            <ul class="accs" id="accList"></ul>
-            <form class="newacc" id="newAcc" autocomplete="off">
-              <label class="sr" for="nameIn">Имя нового игрока</label>
-              <input id="nameIn" type="text" maxlength="16" placeholder="Имя игрока">
-              <button class="btn primary mini" type="submit">Создать</button>
-            </form>
-            <p class="err" id="accErr" hidden></p>
-            <p class="note" id="accNote"></p>
-          </div>
-
-          <div class="panel" id="pPin" hidden>
-            <h2 id="pinTitle">PIN-код</h2>
-            <p class="note" id="pinNote"></p>
-            <form id="pinForm" autocomplete="off">
-              <label class="sr" for="pin1">PIN-код</label>
-              <input id="pin1" class="pin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" placeholder="4 цифры">
-              <label class="sr" for="pin2">Повтори PIN-код</label>
-              <input id="pin2" class="pin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" placeholder="Повтори" hidden>
-              <p class="err" id="pinErr" hidden></p>
-              <div class="row2">
-                <button class="btn ghost" id="pinBack" type="button">Назад</button>
-                <button class="btn primary" id="pinOk" type="submit">Войти</button>
-              </div>
-            </form>
-          </div>
-
           <div class="panel" id="pMenu" hidden>
             <div class="who" id="whoRow">
-              <span class="who-name">
-                <span>Игрок: <b id="whoName"></b></span>
-                <button class="icon-btn" id="renameBtn" type="button" aria-label="Изменить имя" title="Изменить имя"><svg viewBox="0 0 24 24"><path d="M4 20l4-1 11-11a2.1 2.1 0 0 0-3-3L5 16l-1 4z"/></svg></button>
-              </span>
-              <button class="btn ghost mini" id="switchBtn" type="button">Другой</button>
+              <span class="who-name"><span>Игрок: <b id="whoName"></b></span></span>
+              <button class="btn ghost mini" id="switchBtn" type="button">Профиль</button>
             </div>
-            <form class="rename" id="renameForm" autocomplete="off" hidden>
-              <label class="sr" for="renameIn">Новое имя</label>
-              <input id="renameIn" type="text" maxlength="16">
-              <button class="icon-btn ok" type="submit" aria-label="Сохранить имя" title="Сохранить"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button>
-              <button class="icon-btn" id="renameCancel" type="button" aria-label="Отменить изменение" title="Отменить"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
-            </form>
-            <p class="err" id="renameErr" hidden></p>
             <div class="swatches" role="radiogroup" aria-label="Цвет змейки" id="swatches"></div>
             <p class="cname">Змейка: <b id="cname"></b></p>
             <div class="speed" role="radiogroup" aria-label="Скорость игры">
@@ -553,6 +518,7 @@ input[type="text"], input.pin {
             <p class="big"><span id="overScore">0</span> <small id="overUnit">яблок</small></p>
             <p class="earn">За партию: <b>+<span id="overCoins">0</span></b> <span class="coin"></span></p>
             <p class="badge" id="newBest" hidden>Новый рекорд</p>
+            <p class="note" id="guestNote" hidden>Ты играешь как гость. Войди в аккаунт, чтобы сохранить результат и монеты.</p>
             <button class="btn primary" id="againBtn" type="button">Играть снова</button>
             <button class="btn ghost" id="recolorBtn" type="button">Цвет и скины</button>
           </div>
@@ -578,7 +544,7 @@ input[type="text"], input.pin {
       <section>
         <h2>Рейтинг игроков</h2>
         <ol class="rows rating" id="rating"></ol>
-        <p class="empty" id="ratingEmpty">Пока нет игроков. Создай первого на экране игры.</p>
+        <p class="empty" id="ratingEmpty">Пока нет игроков с аккаунтом.</p>
       </section>
 
       <section>
@@ -590,7 +556,7 @@ input[type="text"], input.pin {
       <section>
         <h2>Задания на сегодня</h2>
         <ul class="rows tasks" id="tasks"></ul>
-        <p class="empty" id="tasksEmpty">Выбери игрока, чтобы увидеть задания.</p>
+        <p class="empty" id="tasksEmpty">Задания появятся после первого запуска.</p>
       </section>
 
       <section>
@@ -976,7 +942,6 @@ input[type="text"], input.pin {
   }
 
   /* ---------- Игроки и сохранение ---------- */
-  var storageOk = true;
 
   function blankAcc(name) {
     return {
@@ -1023,70 +988,28 @@ input[type="text"], input.pin {
     }
     return o;
   }
-  function loadStore() {
-    var out = { last: null, accounts: [], restored: [] };
-    var d = null;
-    try {
-      d = JSON.parse(localStorage.getItem(KEY));
-      localStorage.setItem(KEY + '.probe', '1');
-      localStorage.removeItem(KEY + '.probe');
-    } catch (e) { storageOk = false; }
-    if (d && Array.isArray(d.accounts)) {
-      out.accounts = d.accounts.map(normAcc).filter(Boolean).slice(0, MAX_ACC);
-      out.last = typeof d.last === 'string' ? d.last : null;
-      out.restored = Array.isArray(d.restored) ? d.restored.filter(function (x) { return typeof x === 'string'; }) : [];
-    } else {
-      try {
-        var o = JSON.parse(localStorage.getItem(OLD_KEY));
-        if (o && o.games > 0 && Array.isArray(o.results)) {
-          var a = blankAcc('Игрок 1');
-          a.color = isItem(o.color) && !isSkin(o.color) ? o.color : 'emerald';
-          a.results = o.results.filter(function (r) {
-            return r && typeof r.s === 'number' && typeof r.id === 'number';
-          }).map(function (r) {
-            return { id: r.id, s: r.s, c: isItem(r.c) && !isSkin(r.c) ? r.c : 'emerald', a: r.s * APPLE_COINS, p: 0, m: 0 };
-          });
-          a.games = +o.games || 0;
-          a.apples = +o.apples || 0;
-          a.coins = a.apples * APPLE_COINS;
-          a.earned = a.coins;
-          out.accounts.push(a);
-        }
-      } catch (e2) { /* нет старых данных */ }
-    }
-    return out;
-  }
-  var store = loadStore();
-
-  /* Одноразовое возвращение Даниэлы: 240 монет и тигровый скин.
-     Результаты и историю партий восстановить нельзя. PIN-код она задаст при первом входе. */
-  (function restoreDaniela() {
-    var tag = 'daniela-1';
-    if (store.restored.indexOf(tag) >= 0) return;
-    store.restored.push(tag);
-    var exists = store.accounts.some(function (a) { return a.name.toLowerCase() === 'даниэла'; });
-    if (!exists && store.accounts.length < MAX_ACC) {
-      var d = blankAcc('Даниэла');
-      d.coins = 240;
-      d.earned = 240;
-      d.owned = ['tiger'];
-      d.color = 'tiger';
-      store.accounts.push(d);
-    }
-    persist();
-  })();
-
+  /* Данные Змейки лежат в общем аккаунте: Hub.gameData('snake'). Монеты общие для всех игр. */
+  var SNAKE_FIELDS = ['color', 'speed', 'owned', 'results', 'buys', 'games', 'apples', 'st', 'ach', 'bonus', 'daily'];
   var data = blankAcc('');
-  data.id = null;
-
-  function persist() {
-    try { localStorage.setItem(KEY, JSON.stringify(store)); }
-    catch (e) { storageOk = false; $('storeNote').hidden = false; }
+  function hide(o, k, desc) { desc.configurable = true; desc.enumerable = false; Object.defineProperty(o, k, desc); }
+  function bindData() {
+    var g = Hub.gameData('snake', {});
+    var n = normAcc(Object.assign({}, g, { id: 'x', name: 'x' }));
+    SNAKE_FIELDS.forEach(function (k) { g[k] = n[k]; });
+    hide(g, 'id', { get: function () { var u = Hub.user(); return u ? u.id : 'guest'; } });
+    hide(g, 'name', { get: function () { var u = Hub.user(); return u ? u.name : 'Гость'; } });
+    hide(g, 'coins', {
+      get: function () { return Hub.coins(); },
+      set: function (v) {
+        var d = Math.floor(v) - Hub.coins();
+        if (d > 0) Hub.addCoins(d); else if (d < 0) Hub.spend(-d);
+      }
+    });
+    hide(g, 'earned', { get: function () { return Hub.earned(); }, set: function () { /* учитывается в Hub.addCoins */ } });
+    data = g;
   }
-  function save() {
-    if (data.id) store.last = data.id;
-    persist();
-  }
+  function persist() { Hub.save(); }
+  function save() { Hub.save(); }
 
   /* Кнопка «Сохранить»: пишет данные, читает обратно и сверяет, только потом показывает галочку */
   var saveTimer = null;
@@ -1104,21 +1027,14 @@ input[type="text"], input.pin {
     }, ok ? 2500 : 6000);
   }
   function saveNow() {
-    if (!data.id) return;
-    store.last = data.id;
-    var ok = false;
-    try {
-      var json = JSON.stringify(store);
-      localStorage.setItem(KEY, json);
-      ok = localStorage.getItem(KEY) === json;
-    } catch (e) { ok = false; }
-    storageOk = ok;
+    if (!Hub.user()) { Hub.openLogin('Войди в аккаунт, чтобы сохранять прогресс.'); return; }
+    var ok = Hub.saveNow();
     $('storeNote').hidden = ok;
     showSaved(ok);
   }
   function bestOf(a) {
     var m = 0;
-    a.results.forEach(function (r) { if (r.s > m) m = r.s; });
+    (a.results || []).forEach(function (r) { if (r.s > m) m = r.s; });
     return m;
   }
   function owned(item) { return !item.price || data.owned.indexOf(item.id) >= 0; }
@@ -1558,7 +1474,7 @@ input[type="text"], input.pin {
   }
 
   function startGame() {
-    if (!data.id) return;
+    if (modalOpen) return;
     if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
     var m = Math.floor(N / 2);
     G.snake = [{ x: m, y: m }, { x: m - 1, y: m }, { x: m - 2, y: m }];
@@ -1692,7 +1608,9 @@ input[type="text"], input.pin {
       $('overUnit').textContent = plural(G.score, W_APPLE);
       $('overCoins').textContent = G.earned;
       $('newBest').hidden = !G.newBest;
+      $('guestNote').hidden = !!Hub.user();
       showPanel('pOver');
+      if (!Hub.user()) setTimeout(Hub.offerSave, 900);
       $('againBtn').focus({ preventScroll: true });
     }, 450);
   }
@@ -1705,7 +1623,7 @@ input[type="text"], input.pin {
     $('resumeBtn').focus({ preventScroll: true });
   }
   function resume() {
-    if (G.state !== 'paused') return;
+    if (G.state !== 'paused' || modalOpen) return;
     if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
     G.state = 'playing';
     showPanel(null);
@@ -1713,7 +1631,7 @@ input[type="text"], input.pin {
   }
 
   /* ---------- Панели ---------- */
-  var panels = ['pAcc', 'pPin', 'pMenu', 'pShop', 'pPause', 'pOver'];
+  var panels = ['pMenu', 'pShop', 'pPause', 'pOver'];
   function showPanel(name) {
     $('overlay').hidden = name === null;
     panels.forEach(function (p) { $(p).hidden = p !== name; });
@@ -1724,226 +1642,27 @@ input[type="text"], input.pin {
     $('best').textContent = Math.max(bestOf(data), live ? G.score : 0);
     $('coins').textContent = data.coins;
     $('pauseBtn').hidden = !(G.state === 'playing' || G.state === 'paused');
-    $('saveBtn').hidden = !data.id;
+    $('saveBtn').hidden = !Hub.user();
     if (G.state === 'playing') $('pauseBtn').textContent = 'Пауза';
   }
 
-  /* ---------- Экран игроков ---------- */
-  function accErr(msg) {
-    $('accErr').textContent = msg;
-    $('accErr').hidden = !msg;
-  }
-  function renderAccounts() {
-    var ul = $('accList');
-    ul.textContent = '';
-    store.accounts.forEach(function (a) {
-      var li = document.createElement('li');
-      if (a.id === store.last) li.className = 'last';
-      var pick = document.createElement('button');
-      pick.type = 'button';
-      pick.className = 'acc-pick';
-      var nm = document.createElement('span');
-      nm.className = 'nm';
-      nm.textContent = a.name;
-      var meta = document.createElement('span');
-      meta.className = 'sub';
-      meta.textContent = 'Рекорд ' + bestOf(a) + ' · ' + a.coins + ' ' + plural(a.coins, W_COIN) + (a.pin ? '' : ' · PIN-код не задан');
-      pick.appendChild(nm);
-      pick.appendChild(meta);
-      pick.addEventListener('click', function () { openPin(a, a.pin ? 'login' : 'set', false); });
-      li.appendChild(pick);
-      ul.appendChild(li);
-    });
-    var full = store.accounts.length >= MAX_ACC;
-    $('newAcc').hidden = full;
-    $('accTitle').textContent = store.accounts.length ? 'Кто играет?' : 'Создай игрока';
-    $('accNote').textContent = full
-      ? 'Достигнут максимум: десять игроков.'
-      : (store.accounts.length ? 'Можно создать до десяти игроков. У каждого свой PIN-код.' : 'Имя нужно, чтобы сохранять результаты, монеты и скины.');
-  }
-
-  function setAccount(id) {
-    var a = null;
-    store.accounts.forEach(function (x) { if (x.id === id) a = x; });
-    if (!a) return;
-    data = a;
+  /* ---------- Общий аккаунт ---------- */
+  var modalOpen = false;
+  function refreshPlayer() {
+    bindData();
     ensureDaily();
     checkAch(true);
     save();
-    $('whoName').textContent = a.name;
-    setRenaming(false);
+    var u = Hub.user();
+    $('whoName').textContent = u ? u.name : 'Гость';
+    $('switchBtn').textContent = u ? 'Профиль' : 'Войти';
     syncSel();
     renderSide();
     updateHud();
-    setDemo();
-    showPanel('pMenu');
-    $('playBtn').focus({ preventScroll: true });
+    if (!$('pShop').hidden) renderShop();
   }
-
-  $('newAcc').addEventListener('submit', function (e) {
-    e.preventDefault();
-    var name = $('nameIn').value.replace(/\s+/g, ' ').trim();
-    if (!name) { accErr('Введи имя игрока.'); return; }
-    if (store.accounts.length >= MAX_ACC) { accErr('Больше десяти игроков создать нельзя.'); return; }
-    var low = name.toLowerCase();
-    for (var i = 0; i < store.accounts.length; i++) {
-      if (store.accounts[i].name.toLowerCase() === low) { accErr('Игрок с таким именем уже есть.'); return; }
-    }
-    var a = blankAcc(name);
-    $('nameIn').value = '';
-    accErr('');
-    openPin(a, 'set', true);
-  });
-
-  /* ---------- PIN-код ---------- */
-  var pinCtx = null, pinFails = 0, pinLockUntil = 0;
-
-  function hashPin(pin, salt) {
-    var str = salt + ':' + pin;
-    if (window.crypto && window.crypto.subtle && window.TextEncoder) {
-      return window.crypto.subtle.digest('SHA-256', new TextEncoder().encode(str)).then(function (buf) {
-        return Array.prototype.map.call(new Uint8Array(buf), function (b) {
-          return ('0' + b.toString(16)).slice(-2);
-        }).join('');
-      });
-    }
-    var h = 5381;
-    for (var i = 0; i < str.length; i++) h = ((h << 5) + h + str.charCodeAt(i)) | 0;
-    return Promise.resolve('x' + (h >>> 0).toString(16));
-  }
-  function pinErr(msg) {
-    $('pinErr').textContent = msg;
-    $('pinErr').hidden = !msg;
-  }
-  function openPin(acc, mode, isNew) {
-    pinCtx = { acc: acc, mode: mode, isNew: isNew };
-    var set = mode === 'set';
-    $('pinTitle').textContent = set ? 'Придумай PIN-код' : 'Введи PIN-код';
-    $('pinNote').textContent = set
-      ? 'Игрок: ' + acc.name + '. Нужно 4 цифры, они понадобятся при каждом входе.'
-      : 'Игрок: ' + acc.name;
-    $('pin1').value = '';
-    $('pin2').value = '';
-    $('pin2').hidden = !set;
-    $('pinOk').textContent = set ? 'Сохранить' : 'Войти';
-    pinErr('');
-    showPanel('pPin');
-    $('pin1').focus({ preventScroll: true });
-  }
-
-  ['pin1', 'pin2'].forEach(function (id) {
-    $(id).addEventListener('input', function () {
-      var v = this.value.replace(/\D/g, '').slice(0, 4);
-      if (v !== this.value) this.value = v;
-      pinErr('');
-      if (v.length !== 4 || !pinCtx) return;
-      if (pinCtx.mode === 'login' && id === 'pin1') $('pinOk').click();
-      else if (pinCtx.mode === 'set') {
-        if (id === 'pin1') $('pin2').focus();
-        else $('pinOk').click();
-      }
-    });
-  });
-
-  $('pinForm').addEventListener('submit', function (e) {
-    e.preventDefault();
-    var ctx0 = pinCtx;
-    if (!ctx0) return;
-    var acc = ctx0.acc;
-    var p1 = $('pin1').value;
-    if (!/^\d{4}$/.test(p1)) { pinErr('PIN-код состоит из 4 цифр.'); return; }
-
-    if (ctx0.mode === 'set') {
-      if ($('pin2').value !== p1) {
-        pinErr('PIN-коды не совпадают. Повтори ещё раз.');
-        $('pin2').value = '';
-        $('pin2').focus({ preventScroll: true });
-        return;
-      }
-      var salt = Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
-      hashPin(p1, salt).then(function (h) {
-        if (ctx0.isNew && store.accounts.length >= MAX_ACC) { pinErr('Больше десяти игроков создать нельзя.'); return; }
-        acc.pin = { s: salt, h: h };
-        if (ctx0.isNew) store.accounts.push(acc);
-        pinCtx = null;
-        persist();
-        renderAccounts();
-        setAccount(acc.id);
-      });
-      return;
-    }
-
-    var wait = Math.ceil((pinLockUntil - Date.now()) / 1000);
-    if (wait > 0) { pinErr('Слишком много попыток. Подожди ' + wait + ' с.'); return; }
-    hashPin(p1, acc.pin.s).then(function (h) {
-      if (h === acc.pin.h) {
-        pinFails = 0;
-        pinCtx = null;
-        setAccount(acc.id);
-        return;
-      }
-      pinFails++;
-      $('pin1').value = '';
-      if (pinFails >= 5) {
-        pinFails = 0;
-        pinLockUntil = Date.now() + 30000;
-        pinErr('Слишком много попыток. Подожди 30 секунд.');
-      } else {
-        pinErr('Неверный PIN-код.');
-      }
-      $('pin1').focus({ preventScroll: true });
-    });
-  });
-
-  $('pinBack').addEventListener('click', function () {
-    pinCtx = null;
-    renderAccounts();
-    showPanel('pAcc');
-  });
-
   $('switchBtn').addEventListener('click', function () {
-    setRenaming(false);
-    renderAccounts();
-    showPanel('pAcc');
-  });
-
-  /* ---------- Смена имени ---------- */
-  function renameErr(msg) {
-    $('renameErr').textContent = msg;
-    $('renameErr').hidden = !msg;
-  }
-  function setRenaming(on) {
-    $('whoRow').hidden = on;
-    $('renameForm').hidden = !on;
-    renameErr('');
-    if (on) {
-      $('renameIn').value = data.name;
-      $('renameIn').focus({ preventScroll: true });
-      $('renameIn').select();
-    }
-  }
-  $('renameBtn').addEventListener('click', function () {
-    if (data.id) setRenaming(true);
-  });
-  $('renameCancel').addEventListener('click', function () { setRenaming(false); });
-  $('renameIn').addEventListener('keydown', function (e) {
-    if (e.key === 'Escape') { e.preventDefault(); setRenaming(false); }
-  });
-  $('renameForm').addEventListener('submit', function (e) {
-    e.preventDefault();
-    var name = $('renameIn').value.replace(/\s+/g, ' ').trim();
-    if (!name) { renameErr('Введи имя игрока.'); return; }
-    var low = name.toLowerCase();
-    for (var i = 0; i < store.accounts.length; i++) {
-      var a = store.accounts[i];
-      if (a.id !== data.id && a.name.toLowerCase() === low) { renameErr('Игрок с таким именем уже есть.'); return; }
-    }
-    data.name = name;
-    save();
-    $('whoName').textContent = name;
-    renderSide();
-    renderAccounts();
-    setRenaming(false);
+    if (Hub.user()) Hub.openProfile(); else Hub.openLogin();
   });
 
   /* ---------- Цвет и магазин ---------- */
@@ -2043,6 +1762,7 @@ input[type="text"], input.pin {
     });
   }
   function buy(sk) {
+    if (!Hub.user()) { Hub.openLogin('Чтобы покупать скины, войди в аккаунт. Монеты, заработанные гостем, перейдут в него.'); return; }
     if (owned(sk) || data.coins < sk.price) return;
     data.coins -= sk.price;
     data.owned.push(sk.id);
@@ -2068,26 +1788,30 @@ input[type="text"], input.pin {
     // Рейтинг игроков
     var rl = $('rating');
     rl.textContent = '';
-    var accs = store.accounts.slice().sort(function (a, b) {
-      return bestOf(b) - bestOf(a) || b.games - a.games;
+    var me = Hub.user();
+    var accs = Hub.accounts().map(function (a) {
+      return { a: a, g: (a.games && a.games.snake) || { results: [], games: 0, apples: 0 } };
+    }).sort(function (x, y) {
+      return bestOf(y.g) - bestOf(x.g) || (y.g.games || 0) - (x.g.games || 0);
     });
-    accs.forEach(function (a, i) {
-      var li = el('li', a.id === data.id ? 'me' : '');
+    accs.forEach(function (x, i) {
+      var a = x.a, g = x.g;
+      var li = el('li', me && a.id === me.id ? 'me' : '');
       li.appendChild(el('span', 'rk', i + 1));
       var mid = el('div', '');
       mid.appendChild(el('span', 'who-n', a.name));
-      mid.appendChild(el('div', 'sub', 'партий ' + a.games + ' · яблок ' + a.apples + ' · ' + a.coins + ' ' + plural(a.coins, W_COIN)));
+      mid.appendChild(el('div', 'sub', 'партий ' + (g.games || 0) + ' · яблок ' + (g.apples || 0) + ' · ' + a.coins + ' ' + plural(a.coins, W_COIN)));
       li.appendChild(mid);
-      var sc = el('span', 'sc', bestOf(a) + ' ');
-      sc.appendChild(el('em', '', plural(bestOf(a), W_APPLE)));
+      var sc = el('span', 'sc', bestOf(g) + ' ');
+      sc.appendChild(el('em', '', plural(bestOf(g), W_APPLE)));
       li.appendChild(sc);
       rl.appendChild(li);
     });
     $('ratingEmpty').hidden = accs.length > 0;
 
     // Мои результаты
-    var has = !!data.id;
-    $('mineTitle').textContent = has ? 'Результаты: ' + data.name : 'Мои результаты';
+    var has = !!Hub.user();
+    $('mineTitle').textContent = has ? 'Результаты: ' + data.name : 'Результаты гостя';
     $('stGames').textContent = data.games;
     $('stBest').textContent = bestOf(data);
     $('stApples').textContent = data.apples;
@@ -2096,9 +1820,11 @@ input[type="text"], input.pin {
 
     // Все партии всех игроков, без входа в аккаунт
     var all = [];
-    store.accounts.forEach(function (a) {
-      a.results.forEach(function (r) { all.push({ n: a.name, me: a.id === data.id, r: r }); });
+    Hub.accounts().forEach(function (a) {
+      var g = a.games && a.games.snake;
+      ((g && g.results) || []).forEach(function (r) { all.push({ n: a.name, me: !!me && a.id === me.id, r: r }); });
     });
+    if (!me) data.results.forEach(function (r) { all.push({ n: 'Гость', me: true, r: r }); });
     all.sort(function (x, y) { return y.r.s - x.r.s || y.r.id - x.r.id; });
     var ol = $('allGames');
     ol.textContent = '';
@@ -2154,7 +1880,7 @@ input[type="text"], input.pin {
       hl.appendChild(li);
     });
     $('histEmpty').hidden = items.length > 0;
-    $('storeNote').hidden = storageOk;
+    $('storeNote').hidden = Hub.storageOk();
     renderTasks();
     renderBadges();
   }
@@ -2524,6 +2250,7 @@ input[type="text"], input.pin {
     ArrowLeft: [-1, 0], KeyA: [-1, 0], ArrowRight: [1, 0], KeyD: [1, 0]
   };
   window.addEventListener('keydown', function (e) {
+    if (modalOpen) return;
     var k = e.code;
     if (G.state === 'playing') {
       var m = KEYS[k];
@@ -2638,10 +2365,19 @@ input[type="text"], input.pin {
   });
   setDemo();
   resize();
-  renderAccounts();
-  renderSide();
-  updateHud();
-  showPanel('pAcc');
+  Hub.mountBar($('hubbar'), { wallet: false });
+  Hub.on('modal', function (d) { modalOpen = d.open; if (d.open) pause(); });
+  Hub.on('coins', function () { updateHud(); if (!$('pShop').hidden) renderShop(); });
+  Hub.on('session', function () {
+    pause();
+    refreshPlayer();
+    if (G.state === 'menu') { setDemo(); showPanel('pMenu'); }
+  });
+  Hub.ready.then(function () {
+    refreshPlayer();
+    showPanel('pMenu');
+    $('playBtn').focus({ preventScroll: true });
+  });
   requestAnimationFrame(frame);
 })();
 </script>
