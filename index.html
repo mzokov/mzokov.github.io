@@ -29,6 +29,7 @@ body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--font-body);
 .wbtn{font:inherit;font-weight:700;min-height:44px;padding:8px 20px;border-radius:12px;border:0;background:var(--accent);color:var(--surface);cursor:pointer}
 .wbtn:focus-visible{outline:3px solid var(--fg);outline-offset:2px}
 h1{font-family:var(--font-display);font-weight:700;font-size:clamp(34px,9vw,60px);line-height:1.05;margin:0 0 10px;text-wrap:balance}
+.by{margin:-10px 0 clamp(22px,5vw,36px);font-weight:700;font-size:14px;color:var(--accent)}
 .lead{margin:0 0 clamp(22px,5vw,36px);color:var(--muted);max-width:46ch}
 .grid{display:grid;gap:20px;grid-template-columns:repeat(auto-fill,minmax(min(100%,270px),1fr))}
 .card{display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--line);border-radius:18px;
@@ -54,6 +55,7 @@ footer{margin-top:36px;color:var(--muted);font-size:13px;max-width:60ch}
   <div class="top"><div id="hubbar"></div></div>
   <h1>Игры</h1>
   <p class="lead">Играй прямо в браузере, на компьютере или на телефоне. Ничего устанавливать не нужно.</p>
+  <p class="by">Разработано Даниэлой Мзоковой</p>
 
   <section class="welcome" id="welcome" hidden>
     <p><b>Можно играть сразу, без регистрации.</b> Войди в аккаунт, чтобы монеты и рекорды сохранялись и работали во всех играх.</p>
@@ -87,7 +89,7 @@ footer{margin-top:36px;color:var(--muted);font-size:13px;max-width:60ch}
     </div>
   </div>
 
-  <footer>Аккаунт общий для всех игр. Данные хранятся в браузере этого устройства, на другом устройстве аккаунт нужно создать заново.</footer>
+  <footer><b>Разработано Даниэлой Мзоковой.</b><br>Аккаунт общий для всех игр. Данные хранятся в браузере этого устройства, на другом устройстве аккаунт нужно создать заново.</footer>
 </main>
 <script src="shared/hub.js"></script>
 <script>
