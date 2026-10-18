@@ -111,7 +111,11 @@ h1 {
 .stat { display: flex; flex-direction: column; }
 .stat .k { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 700; }
 .stat .v { font-family: var(--font-display); font-weight: 700; font-size: 24px; line-height: 1.2; font-variant-numeric: tabular-nums; }
-#pauseBtn { margin-left: auto; }
+.hud-btns { margin-left: auto; display: flex; gap: 8px; }
+#saveBtn { min-width: 150px; }
+#saveBtn.saved { border-color: var(--good); color: var(--good); }
+#saveBtn.fail { border-color: var(--accent); color: var(--accent); }
+.ck { width: 16px; height: 16px; margin-right: 6px; vertical-align: -3px; fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
 
 .coin {
   display: inline-block;
@@ -460,7 +464,12 @@ input[type="text"], input.pin {
         <div class="stat"><span class="k">Яблоки</span><span class="v" id="score">0</span></div>
         <div class="stat"><span class="k">Рекорд</span><span class="v" id="best">0</span></div>
         <div class="stat"><span class="k">Монеты</span><span class="v"><span class="coin"></span> <span id="coins">0</span></span></div>
-        <button class="btn ghost" id="pauseBtn" type="button" hidden>Пауза</button>
+        <div class="hud-btns">
+          <button class="btn ghost" id="saveBtn" type="button" hidden>
+            <svg class="ck" id="saveIc" viewBox="0 0 24 24" aria-hidden="true" hidden><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span id="saveTxt" aria-live="polite">Сохранить</span>
+          </button>
+          <button class="btn ghost" id="pauseBtn" type="button" hidden>Пауза</button>
+        </div>
       </div>
 
       <div class="stage" id="stage">
@@ -1078,6 +1087,35 @@ input[type="text"], input.pin {
     if (data.id) store.last = data.id;
     persist();
   }
+
+  /* Кнопка «Сохранить»: пишет данные, читает обратно и сверяет, только потом показывает галочку */
+  var saveTimer = null;
+  function showSaved(ok) {
+    var b = $('saveBtn');
+    b.classList.toggle('saved', ok);
+    b.classList.toggle('fail', !ok);
+    $('saveIc').toggleAttribute('hidden', !ok);
+    $('saveTxt').textContent = ok ? 'Сохранено' : 'Не сохранилось';
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(function () {
+      b.classList.remove('saved', 'fail');
+      $('saveIc').setAttribute('hidden', '');
+      $('saveTxt').textContent = 'Сохранить';
+    }, ok ? 2500 : 6000);
+  }
+  function saveNow() {
+    if (!data.id) return;
+    store.last = data.id;
+    var ok = false;
+    try {
+      var json = JSON.stringify(store);
+      localStorage.setItem(KEY, json);
+      ok = localStorage.getItem(KEY) === json;
+    } catch (e) { ok = false; }
+    storageOk = ok;
+    $('storeNote').hidden = ok;
+    showSaved(ok);
+  }
   function bestOf(a) {
     var m = 0;
     a.results.forEach(function (r) { if (r.s > m) m = r.s; });
@@ -1686,6 +1724,7 @@ input[type="text"], input.pin {
     $('best').textContent = Math.max(bestOf(data), live ? G.score : 0);
     $('coins').textContent = data.coins;
     $('pauseBtn').hidden = !(G.state === 'playing' || G.state === 'paused');
+    $('saveBtn').hidden = !data.id;
     if (G.state === 'playing') $('pauseBtn').textContent = 'Пауза';
   }
 
@@ -2545,6 +2584,11 @@ input[type="text"], input.pin {
   $('pauseBtn').addEventListener('click', function (e) {
     e.currentTarget.blur();
     if (G.state === 'playing') pause(); else if (G.state === 'paused') resume();
+  });
+
+  $('saveBtn').addEventListener('click', function (e) {
+    saveNow();
+    e.currentTarget.blur();
   });
 
   var resetTimer = null;
