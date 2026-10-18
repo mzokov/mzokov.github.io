@@ -302,6 +302,29 @@
       return finishLogin(acc);
     });
   }
+  function changePassword(oldPw, newPw) {
+    var acc = user();
+    if (!acc) return Promise.resolve({ ok: false, error: 'Сначала войди в аккаунт.' });
+    if (newPw.length < 4) return Promise.resolve({ ok: false, error: 'Новый пароль должен быть не короче 4 символов.' });
+    var wait = Math.ceil((lockUntil - Date.now()) / 1000);
+    if (wait > 0) return Promise.resolve({ ok: false, error: 'Слишком много попыток. Подожди ' + wait + ' с.' });
+    return Promise.all(acc.auth.map(function (a) {
+      return hashPw(oldPw, a.s).then(function (hh) { return hh === a.h; });
+    })).then(function (res) {
+      if (!res.some(Boolean)) {
+        fails++;
+        if (fails >= 5) { fails = 0; lockUntil = Date.now() + 30000; return { ok: false, error: 'Слишком много попыток. Подожди 30 секунд.' }; }
+        return { ok: false, error: 'Текущий пароль неверный.' };
+      }
+      fails = 0;
+      var salt = makeSalt();
+      return hashPw(newPw, salt).then(function (hh) {
+        acc.auth = [{ s: salt, h: hh }];
+        save();
+        return { ok: true };
+      });
+    });
+  }
   function logout() {
     state.session = null;
     guestGames = {};
@@ -593,6 +616,7 @@
       var renameBtn = h('button', { class: 'hub-btn', type: 'button', onclick: showRename }, ['Изменить имя']);
       slot.appendChild(renameBtn);
       body.appendChild(slot);
+      body.appendChild(h('button', { class: 'hub-btn', type: 'button', onclick: viewChangePw }, ['Сменить PIN или пароль']));
       function showRename() {
         slot.textContent = '';
         var inp = h('input', { type: 'text', maxlength: '16', value: u.name, 'aria-label': 'Новое имя', autocomplete: 'off' });
@@ -616,6 +640,30 @@
         h('button', { class: 'hub-btn', type: 'button', onclick: function () { closeModal(); logout(); } }, ['Выйти']),
         h('button', { class: 'hub-btn hub-primary', type: 'button', onclick: closeModal }, ['Закрыть'])
       ]));
+    });
+  }
+  function viewChangePw() {
+    openModal('Смена PIN или пароля', function (body) {
+      var o = h('input', { type: 'password', autocomplete: 'current-password', maxlength: '64' });
+      var n1 = h('input', { type: 'password', autocomplete: 'new-password', maxlength: '64' });
+      var n2 = h('input', { type: 'password', autocomplete: 'new-password', maxlength: '64' });
+      var err = h('p', { class: 'hub-err', role: 'alert' });
+      body.appendChild(field('Текущий PIN или пароль', o));
+      body.appendChild(field('Новый PIN или пароль, от 4 символов', n1));
+      body.appendChild(field('Повтори новый', n2));
+      body.appendChild(err);
+      body.appendChild(h('div', { class: 'hub-row' }, [
+        h('button', { class: 'hub-btn hub-ghost', type: 'button', onclick: viewProfile }, ['Назад']),
+        h('button', { class: 'hub-btn hub-primary', type: 'submit' }, ['Сохранить'])
+      ]));
+      body.onsubmit = function (e) {
+        e.preventDefault();
+        if (n1.value !== n2.value) { err.textContent = 'Новые пароли не совпадают.'; return; }
+        changePassword(o.value, n1.value).then(function (r) {
+          if (r.ok) { closeModal(); toast('PIN или пароль изменён'); }
+          else { err.textContent = r.error; }
+        });
+      };
     });
   }
   function openLogin(reason) {
