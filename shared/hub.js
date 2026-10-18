@@ -17,6 +17,13 @@
   var guest = { coins: 0, earned: 0 };
   var guestGames = {};
   var storageOk = true;
+  /* Если в shared/config.js указан проект Firebase, аккаунты хранятся на сервере (Firestore).
+     Без настроек работает запасной режим: данные только в этом браузере. */
+  var CFG = window.HUB_CONFIG || {};
+  var REMOTE = !!(CFG.projectId && CFG.apiKey);
+  var SKEY = 'hub.session';
+  var BASE = REMOTE ? 'https://firestore.googleapis.com/v1/projects/' + encodeURIComponent(CFG.projectId) + '/databases/(default)/documents/accounts' : '';
+  var pushed = {}, syncErr = false, offline = false, warned = false, flushChain = Promise.resolve(), flushTimer = null;
   var handlers = [];
   var bars = [];
   var fails = 0, lockUntil = 0, offered = false;
@@ -85,9 +92,10 @@
     if (s.session && !s.accounts.some(function (a) { return a.id === s.session; })) s.session = null;
     return s;
   }
+  function gstore() { return REMOTE ? sessionStorage : localStorage; }
   function loadGuest() {
     try {
-      var g = JSON.parse(localStorage.getItem(GKEY));
+      var g = JSON.parse(gstore().getItem(GKEY));
       if (g && typeof g === 'object') {
         return { coins: Math.max(0, Math.floor(+g.coins || 0)), earned: Math.max(0, Math.floor(+g.earned || 0)) };
       }
@@ -95,20 +103,178 @@
     return { coins: 0, earned: 0 };
   }
   function save() {
+    if (REMOTE) { scheduleFlush(); return; }
     try { localStorage.setItem(KEY, JSON.stringify(state)); }
     catch (e) { storageOk = false; }
   }
   function saveGuest() {
-    try { localStorage.setItem(GKEY, JSON.stringify(guest)); } catch (e) { /* гостевые монеты не критичны */ }
+    try { gstore().setItem(GKEY, JSON.stringify(guest)); } catch (e) { /* гостевые монеты не критичны */ }
   }
   /* Записывает, читает обратно и сверяет: true только если данные действительно лежат в хранилище */
   function saveNow() {
+    if (REMOTE) return saveNowRemote();
+    return Promise.resolve(saveNowLocal());
+  }
+  function saveNowLocal() {
     try {
       var json = JSON.stringify(state);
       localStorage.setItem(KEY, json);
       storageOk = localStorage.getItem(KEY) === json;
     } catch (e) { storageOk = false; }
     return storageOk;
+  }
+
+  /* ---------- сервер (Firestore, REST) ---------- */
+  function keyQ() { return '?key=' + encodeURIComponent(CFG.apiKey); }
+  function docToAcc(d) {
+    try { return normAccount(JSON.parse(d.fields.json.stringValue)); } catch (e) { return null; }
+  }
+  function apiList() {
+    return fetch(BASE + keyQ() + '&pageSize=100').then(function (r) {
+      if (!r.ok) throw new Error('list ' + r.status);
+      return r.json();
+    }).then(function (j) {
+      return (j.documents || []).map(function (d) {
+        var a = docToAcc(d);
+        return a ? { acc: a, json: d.fields.json.stringValue } : null;
+      }).filter(Boolean);
+    });
+  }
+  function apiPut(acc, json) {
+    var body = JSON.stringify({ fields: {
+      json: { stringValue: json }, name: { stringValue: acc.name }, updated: { integerValue: String(Date.now()) }
+    } });
+    return fetch(BASE + '/' + encodeURIComponent(acc.id) + keyQ(), {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: body, keepalive: body.length < 60000
+    }).then(function (r) { if (!r.ok) throw new Error('put ' + r.status); });
+  }
+  function flush() {
+    if (!REMOTE) return Promise.resolve(true);
+    clearTimeout(flushTimer);
+    flushTimer = null;
+    flushChain = flushChain.then(function () {
+      var jobs = [];
+      state.accounts.forEach(function (a) {
+        var j = JSON.stringify(a);
+        if (pushed[a.id] !== j) jobs.push(apiPut(a, j).then(function () { pushed[a.id] = j; }));
+      });
+      return Promise.all(jobs);
+    }).then(function () {
+      syncErr = false;
+      renderBars();
+      return true;
+    }, function () {
+      syncErr = true;
+      if (!warned) { warned = true; toast('Нет связи с сервером. Прогресс пока не сохранён.'); }
+      clearTimeout(flushTimer);
+      flushTimer = setTimeout(flush, 10000);
+      renderBars();
+      return false;
+    });
+    return flushChain;
+  }
+  function scheduleFlush() {
+    if (flushTimer) return;
+    flushTimer = setTimeout(flush, 500);
+  }
+  function saveNowRemote() {
+    return flush().then(function (ok) {
+      var u = user();
+      if (!ok) return false;
+      if (!u) return true;
+      return fetch(BASE + '/' + encodeURIComponent(u.id) + keyQ()).then(function (r) { return r.json(); }).then(function (d) {
+        return d.fields.json.stringValue === pushed[u.id];
+      }).catch(function () { return false; });
+    });
+  }
+  /* Подтягивает чужие изменения: свои несохранённые правки не затираются */
+  function refresh() {
+    if (!REMOTE || offline) return Promise.resolve();
+    return apiList().then(function (list) {
+      var changedMe = false, changedAny = false, me = state.session;
+      list.forEach(function (it) {
+        var a = it.acc, idx = -1;
+        state.accounts.forEach(function (x, i) { if (x.id === a.id) idx = i; });
+        if (idx < 0) { state.accounts.push(a); pushed[a.id] = it.json; changedAny = true; return; }
+        var mine = state.accounts[idx];
+        if (pushed[a.id] === JSON.stringify(mine) && it.json !== pushed[a.id]) {
+          state.accounts[idx] = a;
+          pushed[a.id] = it.json;
+          changedAny = true;
+          if (a.id === me) changedMe = true;
+        }
+      });
+      syncErr = false;
+      if (changedMe) { guestGames = {}; emit('session', { reason: 'external' }); }
+      else if (changedAny) renderBars();
+    }).catch(function () { /* нет связи, попробуем в следующий раз */ });
+  }
+  function setSessionPtr(id) {
+    if (!REMOTE) return;
+    try { if (id) localStorage.setItem(SKEY, id); else localStorage.removeItem(SKEY); } catch (e) { /* запомнить вход не вышло, не страшно */ }
+  }
+  /* Данные, накопленные в этом браузере до переезда на сервер, один раз заливаются на сервер */
+  function importLocal() {
+    var flag = null;
+    try { flag = localStorage.getItem('hub.imported'); } catch (e) { flag = '1'; }
+    if (flag) return;
+    var local = null;
+    try { local = JSON.parse(localStorage.getItem(KEY)); } catch (e) { local = null; }
+    var had = [];
+    if (local && Array.isArray(local.accounts)) {
+      had = Array.isArray(local.migrated) ? local.migrated.filter(function (x) { return typeof x === 'string'; }) : [];
+      local.accounts.map(normAccount).filter(Boolean).forEach(function (la) {
+        var sa = findByName(la.name);
+        if (!sa) { state.accounts.push(la); return; }
+        var better = la.earned > sa.earned || (!sa.auth.length && la.auth.length);
+        if (better) {
+          var id = sa.id;
+          var idx = state.accounts.indexOf(sa);
+          la.id = id;
+          state.accounts[idx] = la;
+        }
+      });
+    }
+    state.migrated = had;
+    migrate();
+    try { localStorage.setItem('hub.imported', '1'); } catch (e) { /* без флага импорт повторится, но дубли не создаст */ }
+  }
+  function seedRemote() {
+    var jobs = [];
+    if (!findByName('Даниэла')) {
+      var d = normAccount({ id: 'seed-daniela', name: 'Даниэла' });
+      d.coins = 240; d.earned = 240;
+      d.games.snake = { color: 'tiger', owned: ['tiger'] };
+      state.accounts.push(d);
+    }
+    if (!findByName('Папа')) {
+      var salt = makeSalt();
+      jobs.push(hashPw('1234', salt).then(function (hh) {
+        var a = normAccount({ id: 'seed-papa', name: 'Папа' });
+        a.auth = [{ s: salt, h: hh }];
+        state.accounts.push(a);
+      }));
+    }
+    return Promise.all(jobs);
+  }
+  function remoteInit() {
+    var sid = null;
+    try { sid = localStorage.getItem(SKEY); } catch (e) { sid = null; }
+    return apiList().then(function (list) {
+      state.accounts = list.map(function (it) { pushed[it.acc.id] = it.json; return it.acc; });
+      importLocal();
+      return seedRemote();
+    }).then(function () {
+      state.session = sid && state.accounts.some(function (a) { return a.id === sid; }) ? sid : null;
+      return flush();
+    }).then(function () {
+      try { localStorage.removeItem(KEY); } catch (e) { /* старая локальная копия не мешает */ }
+    }).catch(function () {
+      offline = true;
+      syncErr = true;
+      state.accounts = [];
+      state.session = null;
+    });
   }
 
   function user() {
@@ -242,6 +408,7 @@
   /* ---------- вход, регистрация, выход ---------- */
   function finishLogin(acc) {
     state.session = acc.id;
+    setSessionPtr(acc.id);
     var merged = 0;
     if (guest.coins > 0) {
       merged = guest.coins;
@@ -268,7 +435,7 @@
     if (pw.length < 4) return Promise.resolve({ ok: false, error: 'Пароль должен быть не короче 4 символов.' });
     if (state.accounts.length >= MAX_ACC) return Promise.resolve({ ok: false, error: 'Больше десяти игроков создать нельзя.' });
     var salt = makeSalt();
-    return hashPw(pw, salt).then(function (hh) {
+    return refresh().then(function () { return hashPw(pw, salt); }).then(function (hh) {
       if (findByName(name)) return { ok: false, error: 'Игрок с таким именем уже есть.' };
       var acc = normAccount({ id: newId(), name: name });
       acc.auth = [{ s: salt, h: hh }];
@@ -327,6 +494,7 @@
   }
   function logout() {
     state.session = null;
+    setSessionPtr(null);
     guestGames = {};
     save();
     emit('session', { reason: 'logout' });
@@ -383,7 +551,10 @@
     '.hub-coin{width:14px;height:14px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#ffe98f,var(--h-coin));border:1.5px solid var(--h-coine)}',
     '.hub-guest{color:var(--h-mut);font-size:14px}',
     '.hub-btn{font:inherit;font-weight:700;min-height:40px;padding:8px 16px;border-radius:10px;border:1px solid var(--h-line);background:var(--h-bg);color:var(--h-fg);cursor:pointer}',
-    '.hub-btn:hover{background:var(--h-soft)}',
+    '.hub-btn{transition:transform .15s ease,box-shadow .15s ease,background .15s ease}',
+    '.hub-btn:hover{background:var(--h-soft);transform:scale(1.02);box-shadow:0 4px 12px rgba(0,0,0,.18)}',
+    '.hub-btn:active{transform:scale(1)}',
+    '@media (prefers-reduced-motion:reduce){.hub-btn{transition:none}.hub-btn:hover{transform:none}}',
     '.hub-primary{background:var(--h-acc);border-color:transparent;color:var(--h-on)}',
     '.hub-primary:hover{background:var(--h-acc);filter:brightness(1.08)}',
     '.hub-ghost{background:transparent}',
@@ -613,10 +784,11 @@
     openModal(u.name, function (body) {
       body.appendChild(h('div', { class: 'hub-money' }, [h('span', { class: 'hub-coin', 'aria-hidden': 'true' }), h('span', { text: u.coins + ' ' + plural(u.coins, W_COIN) + ', общие для всех игр' })]));
       var slot = h('div');
-      var renameBtn = h('button', { class: 'hub-btn', type: 'button', onclick: showRename }, ['Изменить имя']);
-      slot.appendChild(renameBtn);
+      slot.appendChild(h('div', { class: 'hub-row' }, [
+        h('button', { class: 'hub-btn', type: 'button', onclick: showRename }, ['Изменить имя']),
+        h('button', { class: 'hub-btn', type: 'button', onclick: viewChangePw }, ['Сменить PIN'])
+      ]));
       body.appendChild(slot);
-      body.appendChild(h('button', { class: 'hub-btn', type: 'button', onclick: viewChangePw }, ['Сменить PIN или пароль']));
       function showRename() {
         slot.textContent = '';
         var inp = h('input', { type: 'text', maxlength: '16', value: u.name, 'aria-label': 'Новое имя', autocomplete: 'off' });
@@ -666,9 +838,21 @@
       };
     });
   }
+  function viewOffline() {
+    openModal('Нет связи с сервером', function (body) {
+      body.appendChild(h('p', { class: 'hub-note hub-reason', text: 'Не удалось связаться с сервером, поэтому войти пока нельзя. Проверь интернет и попробуй ещё раз. Играть как гость можно.' }));
+      body.appendChild(h('div', { class: 'hub-row' }, [
+        h('button', { class: 'hub-btn hub-ghost', type: 'button', onclick: closeModal }, ['Играть как гость']),
+        h('button', { class: 'hub-btn hub-primary', type: 'button', onclick: function () { location.reload(); } }, ['Повторить'])
+      ]));
+    });
+  }
   function openLogin(reason) {
     ready.then(function () {
-      if (!state.accounts.length) viewCreate(reason); else viewPick(reason);
+      if (offline) { viewOffline(); return; }
+      return refresh().then(function () {
+        if (!state.accounts.length) viewCreate(reason); else viewPick(reason);
+      });
     });
   }
   function openProfile() { ready.then(viewProfile); }
@@ -690,16 +874,27 @@
   }
 
   /* ---------- запуск ---------- */
-  try { localStorage.setItem(KEY + '.probe', '1'); localStorage.removeItem(KEY + '.probe'); } catch (e) { storageOk = false; }
-  state = load();
   guest = loadGuest();
-  var ready = runInit();
-
-  /* Изменения из другой вкладки: перечитываем данные и сообщаем играм */
-  window.addEventListener('storage', function (e) {
-    if (e.key === KEY) { state = load(); guestGames = {}; emit('session', { reason: 'external' }); }
-    else if (e.key === GKEY) { guest = loadGuest(); renderBars(); }
-  });
+  var ready;
+  if (REMOTE) {
+    ready = remoteInit();
+    document.addEventListener('visibilitychange', function () {
+      if (document.hidden) flush(); else refresh();
+    });
+    window.addEventListener('pagehide', flush);
+    window.addEventListener('online', function () { flush(); refresh(); });
+    setInterval(function () { if (!document.hidden) refresh(); }, 30000);
+  } else {
+    try { localStorage.setItem(KEY + '.probe', '1'); localStorage.removeItem(KEY + '.probe'); } catch (e) { storageOk = false; }
+    state = load();
+    ready = runInit();
+    /* Изменения из другой вкладки: перечитываем данные и сообщаем играм */
+    window.addEventListener('storage', function (e) {
+      if (e.key === KEY) { state = load(); guestGames = {}; emit('session', { reason: 'external' }); }
+      else if (e.key === GKEY) { guest = loadGuest(); renderBars(); }
+    });
+  }
+  ready.then(renderBars);
 
   window.Hub = {
     ready: ready,
@@ -712,7 +907,8 @@
     gameData: gameData,
     save: save,
     saveNow: saveNow,
-    storageOk: function () { return storageOk; },
+    storageOk: function () { return REMOTE ? !syncErr : storageOk; },
+    remote: REMOTE,
     on: on,
     mountBar: mountBar,
     openLogin: openLogin,

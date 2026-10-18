@@ -453,6 +453,7 @@ input[type="text"], input.pin {
 </head>
 <body>
 <a href="../" style="display:block;max-width:920px;margin:0 auto 12px;color:var(--muted);font:500 14px var(--font-body);text-decoration:none">&larr; Все игры</a>
+<script src="../shared/config.js"></script>
 <script src="../shared/hub.js"></script>
 <main class="app">
   <div class="topbar"><div id="hubbar"></div></div>
@@ -575,7 +576,7 @@ input[type="text"], input.pin {
         <h3>История монет</h3>
         <ul class="rows history" id="history"></ul>
         <p class="empty" id="histEmpty">Здесь будут партии и покупки скинов.</p>
-        <p class="note" id="storeNote" hidden>Браузер не разрешает сохранять данные, поэтому игроки и результаты пропадут после закрытия страницы.</p>
+        <p class="note" id="storeNote" hidden>Нет связи с сервером, прогресс пока не сохранён. Не закрывай страницу.</p>
         <button class="btn ghost" id="resetBtn" type="button">Сбросить результаты</button>
       </section>
     </aside>
@@ -1028,9 +1029,11 @@ input[type="text"], input.pin {
   }
   function saveNow() {
     if (!Hub.user()) { Hub.openLogin('Войди в аккаунт, чтобы сохранять прогресс.'); return; }
-    var ok = Hub.saveNow();
-    $('storeNote').hidden = ok;
-    showSaved(ok);
+    $('saveTxt').textContent = 'Сохраняю...';
+    Hub.saveNow().then(function (ok) {
+      $('storeNote').hidden = ok;
+      showSaved(ok);
+    });
   }
   function bestOf(a) {
     var m = 0;

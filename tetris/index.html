@@ -129,6 +129,7 @@ kbd{font-family:var(--f-mono);font-size:12px;border:1px solid var(--line);backgr
 </head>
 <body>
 <a href="../" style="display:block;max-width:760px;margin:0 auto 12px;color:var(--muted);font:500 14px var(--f-body);text-decoration:none">&larr; Все игры</a>
+<script src="../shared/config.js"></script>
 <script src="../shared/hub.js"></script>
 <div class="app">
   <header class="top">
@@ -619,7 +620,7 @@ kbd{font-family:var(--f-mono);font-size:12px;border:1px solid var(--line);backgr
         ol.appendChild(li);
       });
     }
-    $('lbNote').textContent = scope === 'mine' ? 'Ваши последние партии на всех уровнях сложности.' : 'Игроки, у которых есть аккаунт в этом браузере.';
+    $('lbNote').textContent = scope === 'mine' ? 'Ваши последние партии на всех уровнях сложности.' : 'Все игроки с аккаунтом.';
   }
   function appendEmpty(ol, text) {
     var li = document.createElement('li');

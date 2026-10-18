@@ -96,12 +96,14 @@ footer{margin-top:36px;color:var(--muted);font-size:13px;max-width:60ch}
     </div>
   </div>
 
-  <footer>Аккаунт общий для всех игр. Данные хранятся в браузере этого устройства, на другом устройстве аккаунт нужно создать заново.</footer>
+  <footer id="foot">Аккаунт общий для всех игр. Данные хранятся в браузере этого устройства, на другом устройстве аккаунт нужно создать заново.</footer>
 </main>
+<script src="shared/config.js"></script>
 <script src="shared/hub.js"></script>
 <script>
 (function () {
   Hub.mountBar(document.getElementById('hubbar'));
+  if (Hub.remote) document.getElementById('foot').textContent = 'Аккаунт общий для всех игр. Данные хранятся на сервере, играть можно с любого устройства. Главное не забыть зайти под своим именем.';
   function sync() { document.getElementById('welcome').hidden = !!Hub.user(); }
   Hub.on('session', sync);
   Hub.ready.then(sync);
